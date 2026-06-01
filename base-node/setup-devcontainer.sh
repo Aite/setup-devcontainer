@@ -102,23 +102,36 @@ if mount not in config["mounts"]:
 else:
     print("ℹ️  Docker socket mount already present, skipping...")
 
-# Fix postStartCommand to also chmod the docker socket
+# Fix postStartCommand so firewall failures don't stop startup
 post_start = config.get("postStartCommand", "")
-chmod_cmd = "sudo chmod 666 /var/run/docker.sock"
 
 if isinstance(post_start, str):
+    if "init-firewall.sh" in post_start:
+        post_start = post_start.replace(
+            "sudo /usr/local/bin/init-firewall.sh",
+            "sudo /usr/local/bin/init-firewall.sh || true"
+        )
+    chmod_cmd = "sudo chmod 666 /var/run/docker.sock || true"
     if chmod_cmd not in post_start:
         config["postStartCommand"] = f"{post_start} && {chmod_cmd}" if post_start else chmod_cmd
-        print("✅ Added docker socket chmod to postStartCommand")
+        print("✅ Patched postStartCommand (firewall || true + chmod || true)")
     else:
-        print("ℹ️  docker socket chmod already in postStartCommand, skipping...")
-elif isinstance(post_start, list):
-    if chmod_cmd not in post_start:
-        post_start.append(chmod_cmd)
         config["postStartCommand"] = post_start
-        print("✅ Added docker socket chmod to postStartCommand")
-    else:
-        print("ℹ️  docker socket chmod already in postStartCommand, skipping...")
+        print("ℹ️  postStartCommand already patched, skipping...")
+elif isinstance(post_start, list):
+    updated = []
+    for cmd in post_start:
+        if "init-firewall.sh" in cmd:
+            cmd = cmd.replace(
+                "sudo /usr/local/bin/init-firewall.sh",
+                "sudo /usr/local/bin/init-firewall.sh || true"
+            )
+        updated.append(cmd)
+    chmod_cmd = "sudo chmod 666 /var/run/docker.sock || true"
+    if chmod_cmd not in updated:
+        updated.append(chmod_cmd)
+    config["postStartCommand"] = updated
+    print("✅ Patched postStartCommand (firewall || true + chmod || true)")
 
 # Add git-graph extension
 extension = "mhutchie.git-graph"
