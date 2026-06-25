@@ -92,10 +92,40 @@ if docker_feature not in config["features"]:
 else:
     print("ℹ️  docker-outside-of-docker feature already present, skipping...")
 
-# Add Docker socket mount
-mount = "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+# Fix mounts: replace claude-code-config volume with host ~/.claude bind mount
 if "mounts" not in config:
     config["mounts"] = []
+
+filtered_mounts = [m for m in config["mounts"] if "claude-code-config" not in m]
+if len(filtered_mounts) < len(config["mounts"]):
+    print("✅ Removed claude-code-config volume mount")
+config["mounts"] = filtered_mounts
+
+# Add host ~/.claude bind mount
+claude_mount = "source=${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,consistency=cached"
+if claude_mount not in config["mounts"]:
+    config["mounts"].append(claude_mount)
+    print("✅ Added host ~/.claude bind mount")
+else:
+    print("ℹ️  ~/.claude bind mount already present, skipping...")
+
+# Add host ~/.claude.json config file bind mount
+claude_json_mount = "source=${localEnv:HOME}/.claude.json,target=/home/node/.claude.json,type=bind,consistency=cached"
+if claude_json_mount not in config["mounts"]:
+    config["mounts"].append(claude_json_mount)
+    print("✅ Added host ~/.claude.json bind mount")
+else:
+    print("ℹ️  ~/.claude.json bind mount already present, skipping...")
+
+# Remove CLAUDE_CONFIG_DIR from containerEnv (not needed with host bind mount)
+if "containerEnv" in config and "CLAUDE_CONFIG_DIR" in config["containerEnv"]:
+    del config["containerEnv"]["CLAUDE_CONFIG_DIR"]
+    print("✅ Removed CLAUDE_CONFIG_DIR from containerEnv")
+else:
+    print("ℹ️  CLAUDE_CONFIG_DIR not present, skipping...")
+
+# Add Docker socket mount
+mount = "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
 if mount not in config["mounts"]:
     config["mounts"].append(mount)
     print("✅ Docker socket mount added")
